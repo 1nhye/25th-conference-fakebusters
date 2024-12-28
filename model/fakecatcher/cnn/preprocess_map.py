@@ -1,20 +1,19 @@
-import os
-import csv
 import yaml
 import logging
 import argparse
-import numpy as np
 from tqdm import tqdm
 from utils.roi import ROIProcessor
-from utils.ppg.ppg_map import PPG_MAP
-from data.fakeavceleb import load_data
+from ppg.ppg_map import PPG_MAP
+from ppg.ppg_c import PPG_C
+
+from data.fakeforensics import load_fakeforensics_data
 import json
 
 # Argument parser
-parser = argparse.ArgumentParser()
+#parser = argparse.ArgumentParser()
 # parser.add_argument('-c', '--config_path', type=str, required=True, help="Path to the config file.")
-config_path = '/root/25th-conference-fakebusters/model/fakecatcher/config.yaml'
-args = parser.parse_args()
+config_path = '/Users/treecollector/Desktop/test/model/fakecatcher/utils/config.yaml'
+#args = parser.parse_args()
 
 # # Load configuration
 with open(config_path, 'r', encoding='utf-8') as file:
@@ -41,24 +40,26 @@ meta_data_csv_path = config["meta_data_csv_path"]
 
 # Load data
 logger.info("Loading video paths and labels...")
-video_paths, true_labels = load_data(root_directory, meta_data_csv_path)
+video_paths, true_labels = load_fakeforensics_data(meta_data_csv_path)
 
 # Process videos
 logger.info("Processing videos to generate PPG maps...")
 results = []
 for i, (video_path, true_label) in enumerate(tqdm(zip(video_paths, true_labels), total=len(video_paths), desc="Processing videos")):
-    label = 1 if true_label == 'real' else 0
+
+#cv2.imwrite("/Users/treecollector/Desktop/test/model/fakecatcher/ppg/ppg_map.png", ppg_map)
 
     # Process video with ROIProcessor
-    landmarker = ROIProcessor(video_path, config)
+    landmarker = ROIProcessor(video_path="/Volumes/Hoesu_ssd/ff_data/original_sequences/actors/01__outside_talking_still_laughing.mp4", config=config)
     transformed_frames, fps = landmarker.detect_with_map()
     for segment in transformed_frames:
         # Compute PPG Map
         ppg_map = PPG_MAP(segment, fps, config).compute_map()
+        breakpoint()
         print("shape of ppg_map: ", ppg_map.shape)
         # Append results
         results.append({
-            'label': label,
+            'label': true_label,
             'ppg_map': ppg_map.tolist()
         })
         # Save results to JSON file

@@ -29,7 +29,7 @@ class BasicBlock(nn.Module):
         return out
 
 class ResNet34(nn.Module):
-    def __init__(self):
+    def __init__(self, w):
         super(ResNet34, self).__init__()
         self.in_channels = 64
         self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -40,8 +40,10 @@ class ResNet34(nn.Module):
         self.layer2 = self.make_layer(BasicBlock, 128, 4, stride=2)
         self.layer3 = self.make_layer(BasicBlock, 256, 6, stride=2)
         self.layer4 = self.make_layer(BasicBlock, 512, 3, stride=2)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * BasicBlock.expansion, 1)
+        
+        feature_map_width = w // (2 ** 5)  # Downsampling by conv and pooling layers
+        self.avgpool = nn.AdaptiveAvgPool2d((1, feature_map_width))
+        self.fc = nn.Linear(512 * feature_map_width, 1)
         self.sigmoid = nn.Sigmoid()
 
     def make_layer(self, block, out_channels, blocks, stride=1):
@@ -61,6 +63,7 @@ class ResNet34(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        x = x.unsqueeze(1)  # Add channel dimension: (batch_size, 64, w) -> (batch_size, 1, 64, w)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)

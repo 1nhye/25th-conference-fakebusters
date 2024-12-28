@@ -1,77 +1,73 @@
-from .basecnn import baseCNN
-from .resnet import ResNet34
-from .effinet import EfficientNetB3
+from basecnn import baseCNN
+from resnet import ResNet34
+from effinet import EfficientNetB3
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import torch.optim as optim
 
 class Model:
     @staticmethod
-    def get_model(model_name):
+    def get_model(model_name, w):
         if model_name == 'baseCNN':
-            return baseCNN()
+            return baseCNN(w)
         elif model_name == 'ResNet34':
-            return ResNet34()
+            return ResNet34(w)
         elif model_name == 'EfficientNetB3':
-            return EfficientNetB3()
+            return EfficientNetB3(w)
         else:
             raise ValueError(f"Unknown model name: {model_name}")
 
     @staticmethod
-    def train(model, train_loader, val_loader, criterion, optimizer, device, num_epochs=10):
+    def train(model, train_loader, val_loader, criterion, optimizer, device, epochs):
         model.to(device)
-        best_val_loss = float('inf')
-        for epoch in range(num_epochs):
-            # Training phase
+        for epoch in range(epochs):
             model.train()
-            train_loss = 0
+            running_loss = 0.0
+
             for inputs, labels in train_loader:
-                inputs, labels = inputs.to(device), labels.to(device).unsqueeze(1)
-                optimizer.zero_grad()
+                inputs, labels = inputs.to(device), labels.to(device)
+                labels = labels.view(-1, 1).float()
+
+                # Forward pass
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
+
+                # Backward pass
+                optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                train_loss += loss.item()
-            train_loss /= len(train_loader)
 
-            # Validation phase
-            model.eval()
-            val_loss = 0
-            correct = 0
-            with torch.no_grad():
-                for inputs, labels in val_loader:
-                    inputs, labels = inputs.to(device), labels.to(device).unsqueeze(1)
-                    outputs = model(inputs)
-                    loss = criterion(outputs, labels)
-                    val_loss += loss.item()
-                    preds = (outputs > 0.5).float()
-                    correct += (preds == labels).sum().item()
-            val_loss /= len(val_loader)
-            val_accuracy = correct / len(val_loader.dataset)
+                running_loss += loss.item() * inputs.size(0)
 
-            # Print training and validation results
-            print(f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
+            epoch_loss = running_loss / len(train_loader.dataset)
+            print(f"Epoch {epoch + 1}/{epochs}, Loss: {epoch_loss:.4f}")
 
-            # Save the best model
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                torch.save(model.state_dict(), 'best_model.pt')
+            val_loss, val_acurracy = Model.test(model, val_loader, device)
 
     @staticmethod
-    def test(model, dataloader, criterion, device):
-        model.to(device)  # 모델을 디바이스로 이동
+    def test(model, val_loader, device):
         model.eval()
-        total_loss = 0
+        val_loss = 0.0
         correct = 0
+        total = 0
+        criterion = nn.BCELoss()
+
         with torch.no_grad():
-            for inputs, labels in dataloader:
-                inputs, labels = inputs.to(device), labels.to(device).unsqueeze(1)  # 레이블을 (batch_size, 1)로 변경
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                labels = labels.view(-1, 1).float()
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
-                total_loss += loss.item()
-                preds = (outputs > 0.5).float()  # 0.5 임계값을 기준으로 예측
-                correct += (preds == labels).sum().item()
-        accuracy = correct / len(dataloader.dataset)
-        return total_loss / len(dataloader), accuracy
+
+                val_loss += loss.item() * inputs.size(0)
+
+                # Accuracy 계산
+                predicted = (outputs > 0.5).float()
+                correct += (predicted == labels).sum().item()
+                total += labels.size(0)
+
+        val_loss /= len(val_loader.dataset)
+        accuracy = correct / total
+        print(f"Validation Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}")
+        return val_loss, accuracy

@@ -6,9 +6,6 @@ interface AugmentedVideoProps {
 }
 
 const AugmentedVideo: React.FC<AugmentedVideoProps> = ({ videoUrl, score }) => {
-  const formattedScore = score ? parseFloat(score).toFixed(2) : null;
-
-
   return (
     <div className="bg-gray-100">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -25,7 +22,7 @@ const AugmentedVideo: React.FC<AugmentedVideoProps> = ({ videoUrl, score }) => {
                 src={videoUrl}
                 style={{ aspectRatio: '16/9' }} // Adjust aspect ratio to match original dimensions
               />
-              <h3 className="mt-6 text-sm text-gray-500">Augmented Video Loss: {formattedScore}</h3>
+              <h3 className="mt-6 text-sm text-gray-500">Lip-Reading ROI Video Score: {score}</h3>
               </div>
           </div>
         </div>

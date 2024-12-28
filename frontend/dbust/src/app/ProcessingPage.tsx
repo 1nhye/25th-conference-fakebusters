@@ -52,7 +52,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({ originalVideoSrc, roiVi
             />
           </div>
 
-          <h2 className="text-2xl font-bold text-gray-900">Regions of Interest</h2>
+          {/* <h2 className="text-2xl font-bold text-gray-900">Regions of Interest</h2>
 
           <div className="mt-6 space-y-12 lg:grid lg:grid-cols-3 lg:gap-x-6 lg:space-y-0">
             {callouts.map((callout) => (
@@ -71,7 +71,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({ originalVideoSrc, roiVi
                 <p className="text-base font-semibold text-gray-900">{callout.description}</p>
               </div>
             ))}
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

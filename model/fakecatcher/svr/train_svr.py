@@ -1,17 +1,11 @@
-import yaml
-from tqdm import tqdm
-import argparse
 import joblib
 import numpy as np
-import pandas as pd
+from svr.model import Model
+from utils.logging import setup_logging
 from sklearn.model_selection import train_test_split
 
-from utils.feature.feature_extractor import FeatureExtractor
-from svr.svr_model import SVRModel
-from utils.logging import setup_logging
-
 def main():
-    data = joblib.load('features.pkl')
+    data = joblib.load('features_20241223_110602.pkl')
 
     # Set up logging
     global logger
@@ -25,9 +19,14 @@ def main():
 
     # nan 제거
     for features, label in zip(video_features, video_labels):
-        if not np.any(np.isnan(features)):  # Check if there are no NaN values in features
-            valid_features.append(features)
-            valid_labels.append(label)
+        if not isinstance(features, np.ndarray):
+            print("Features is not a numpy array. Current type:", type(features))
+            continue
+        else:
+            print("Features is a numpy array. Proceeding...")
+            if not np.any(np.isnan(features)):  # Check if there are no NaN values in features
+                valid_features.append(features)
+                valid_labels.append(label)
 
 
     # Combine all features and labels
@@ -37,7 +36,7 @@ def main():
     X_train, X_test, y_train, y_test = train_test_split(all_features, all_labels, test_size=0.3, random_state=42)
 
     # Train SVR model
-    model = SVRModel()
+    model = Model()
     save_interval = 100
     for i in range(0, len(X_train), save_interval):
         batch_X = X_train[i:i+save_interval]

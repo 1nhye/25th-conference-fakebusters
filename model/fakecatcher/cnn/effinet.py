@@ -26,9 +26,9 @@ class MBConvBlock(nn.Module):
             return x + self.block(x)
         else:
             return self.block(x)
-
+        
 class EfficientNetB3(nn.Module):
-    def __init__(self):
+    def __init__(self, w):
         super(EfficientNetB3, self).__init__()
         self.stem = nn.Sequential(
             nn.Conv2d(1, 40, kernel_size=3, stride=2, padding=1, bias=False),
@@ -49,13 +49,15 @@ class EfficientNetB3(nn.Module):
             MBConvBlock(192, 192, expand_ratio=6, stride=1, kernel_size=3),
             MBConvBlock(192, 320, expand_ratio=6, stride=1, kernel_size=5)
         )
+
+        feature_map_width = w // (2 ** 5)  # Downsampling through 5 pooling layers
         self.head = nn.Sequential(
             nn.Conv2d(320, 1280, kernel_size=1, bias=False),
             nn.BatchNorm2d(1280),
             nn.SiLU(),
-            nn.AdaptiveAvgPool2d(1),
+            nn.AdaptiveAvgPool2d((1, feature_map_width)),
             nn.Flatten(),
-            nn.Linear(1280, 1),
+            nn.Linear(1280 * feature_map_width, 1),
             nn.Sigmoid()
         )
 

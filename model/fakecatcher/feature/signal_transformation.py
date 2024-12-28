@@ -111,9 +111,3 @@ def pairwise_cross_spectral_density(signal1:np.ndarray, signal2: np.ndarray) -> 
     freqs, csd_values = csd(signal1, signal2)
     # Return as a feature vector
     return freqs, np.abs(csd_values)
-
-if __name__=="__main__":
-    signal2 = np.random.randn(1000)
-
-    print(signal2.shape)
-    print(autocorrelation(signal2))

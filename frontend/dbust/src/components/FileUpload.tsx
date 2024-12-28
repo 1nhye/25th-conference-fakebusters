@@ -5,9 +5,13 @@ import { HStack } from "@chakra-ui/react";
 
 interface FileUploadProps {
     onFileUpload: (file: File) => void;
+    lipSetScore: (score: string) => void;
+    lipSetVideoUrl: (url: string) => void;
+    mmnetSetScore: (score: string) => void;
+    mmnetSetVideoUrl: (url: string) => void;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, lipSetScore, lipSetVideoUrl, mmnetSetScore, mmnetSetVideoUrl }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [preview, setPreview] = useState<string | null>(null);
     const [isPreviewShown, setIsPreviewShown] = useState(false);
@@ -65,11 +69,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
     const handleUpload = useCallback(async () => {
         if (selectedFile) {
             setIsProcessing(true);
-            const startTime = Date.now();
-            console.log(`Upload started at: ${new Date(startTime).toISOString()}`);
 
             try {
-                // File Upload
+                // S3 File Upload
                 // const formData = new FormData();
                 // formData.append('file', selectedFile);
 
@@ -77,22 +79,66 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
                 //     method: 'POST',
                 //     body: formData,
                 // });
-
-                // const endTime = Date.now();
-                // const duration = endTime - startTime;
-                // console.log(`Upload completed in ${duration} milliseconds`);
-
                 // if (!response.ok) {
                 //     throw new Error('Upload failed');
                 // }
-
                 // const data = await response.json();
                 // console.log('File uploaded successfully:', data);
 
-                // Simulate upload
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-                console.log('Simulated upload completed in 1000 milliseconds');
+                // Step 1: Process Lipreading
+                const lipFormData = new FormData();
+                lipFormData.append('file', selectedFile);
+
+                const lipResponse = await fetch('http://localhost:8000/api/models/lipforensic', {
+                    method: 'POST',
+                    body: lipFormData,
+                });
+
+                if (!lipResponse.ok) {
+                    throw new Error('Failed to post video');
+                }
+
+                const lipScore = lipResponse.headers.get('Score');
+                console.log('Score:', lipScore);
+
+                const lipVideoBlob = await lipResponse.blob();
+                const lipVideoUrl = URL.createObjectURL(lipVideoBlob);
+                console.log('Video URL:', lipVideoUrl);
+
+
+
+                // Step 2: Process with MMNET model
+                const mmnetFormData = new FormData();
+                mmnetFormData.append('file', selectedFile);
+
+                const mmnetResponse = await fetch('http://localhost:8000/api/models/mmnet', {
+                    method: 'POST',
+                    body: mmnetFormData,
+                });
+
+                if (!mmnetResponse.ok) {
+                    throw new Error('Failed to post video');
+                }
+
+                const mmnetFilePath = mmnetResponse.headers.get('File-Path');
+                console.log('File path:', mmnetFilePath);
+
+                const mmnetScore = mmnetResponse.headers.get('Score');
+                console.log('Score:', mmnetScore);
+
+                const mmnetVideoBlob = await mmnetResponse.blob();
+                const mmnetVideoUrl = URL.createObjectURL(mmnetVideoBlob);
+                console.log('Video URL:', mmnetVideoUrl);
+
                 
+                // // Simulate upload
+                // await new Promise((resolve) => setTimeout(resolve, 1000));
+                // console.log('Simulated upload completed in 1000 milliseconds');
+                
+                lipSetScore(lipScore || '');
+                lipSetVideoUrl(lipVideoUrl);
+                mmnetSetScore(mmnetScore || '');
+                mmnetSetVideoUrl(mmnetVideoUrl);
                 onFileUpload(selectedFile);
 
                 setPreview(null);
@@ -104,7 +150,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
                 setIsProcessing(false);
             }
         }
-    }, [selectedFile, onFileUpload]);
+    }, [selectedFile, onFileUpload, lipSetScore, lipSetVideoUrl, mmnetSetScore, mmnetSetVideoUrl]);
 
     const handleClear = useCallback(() => {
         setPreview(null);

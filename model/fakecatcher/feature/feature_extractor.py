@@ -7,19 +7,19 @@ from .signal_transformation import *
 
 class FeatureExtractor:
     """
-    """
+    """[[                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    ]]
     def __init__(self, fps, *args):
         """
         params:
         signals: np.ndarray, order: [G_L, G_M, G_R, C_L, C_M, C_R]
         """
         self.fps = fps
-        self.G_L_o, self.G_M_o, self.G_R_o, self.C_L_o, self.C_M_o, self.C_R_o = args
+        self.G_L, self.G_M, self.G_R, self.C_L, self.C_M, self.C_R = args
 
-        self.S = self.prepare_S(self.G_L_o, self.G_R_o, self.G_M_o, self.C_L_o, self.C_R_o, self.C_M_o)
-        self.S_C = self.prepare_S_C(self.C_L_o, self.C_R_o, self.C_M_o)
-        self.D = self.prepare_D(self.C_L_o, self.G_L_o, self.C_R_o, self.G_R_o, self.C_M_o, self.G_M_o)
-        self.D_C = self.prepare_D_C(self.C_L_o, self.C_M_o, self.C_R_o)
+        self.S = self.prepare_S(self.G_L, self.G_R, self.G_M, self.C_L, self.C_R, self.C_M)
+        self.S_C = self.prepare_S_C(self.C_L, self.C_R, self.C_M)
+        self.D = self.prepare_D(self.C_L, self.G_L, self.C_R, self.G_R, self.C_M, self.G_M)
+        self.D_C = self.prepare_D_C(self.C_L, self.C_M, self.C_R)
 
     def prepare_S(self, G_L, G_R, G_M, C_L, C_R, C_M):
         return np.vstack([G_L, G_R, G_M, C_L, C_R, C_M])
@@ -159,7 +159,7 @@ class FeatureExtractor:
         
         features = np.vstack([std, sdann, rmssd, sdnni, sdsd, mean_autocorrelations, sh_entropy])
 
-        assert not np.any(np.isinf(features)), "nan이 존재함함"
+        assert not np.any(np.isinf(features)), "nan이 존재함"
         return features    
 
 import json
@@ -190,54 +190,3 @@ def majority_voting(probabilities):
     mean_prob = np.mean(probabilities)
     majority_vote = np.round(mean_prob)
     return majority_vote
-
-if __name__ == "__main__":
-    from utils.roi import ROIProcessor
-
-    video_path = "/root/audio-visual-forensics/test.mp4"
-    model_path = "misc/face_landmarker.task"
-    landmarker = ROIProcessor(video_path, model_path)
-    R_means_dict, L_means_dict, M_means_dict, fps = landmarker.detect_with_calculate()
-
-
-
-    R_ROI_G_PPG = PPG_G(R_means_dict, fps).compute_signal()
-    print("R_ROI_G_PPG: ", len(R_ROI_G_PPG))
-
-    R_ROI_C_PPG = PPG_C(R_means_dict, fps).compute_signal()
-    print("R_ROI_C_PPG: ", len(R_ROI_C_PPG))
-
-    L_ROI_G_PPG = PPG_G(L_means_dict, fps).compute_signal()
-    print("L_ROI_G_PPG: ", len(L_ROI_G_PPG))
-
-    L_ROI_C_PPG = PPG_C(L_means_dict, fps).compute_signal()
-    print("L_ROI_C_PPG: ", len(L_ROI_C_PPG))
-
-    M_ROI_G_PPG = PPG_G(M_means_dict, fps).compute_signal()
-    print("M_ROI_G_PPG: ", len(M_ROI_G_PPG))
-
-    M_ROI_C_PPG = PPG_C(M_means_dict, fps).compute_signal()
-    print("M_ROI_C_PPG: ", len(M_ROI_C_PPG))
-
-    R_ROI_G_segments = split_segments(R_ROI_G_PPG, fps)
-    R_ROI_C_segments = split_segments(R_ROI_C_PPG, fps)
-    L_ROI_G_segments = split_segments(L_ROI_G_PPG, fps)
-    L_ROI_C_segments = split_segments(L_ROI_C_PPG, fps)
-    M_ROI_G_segments = split_segments(M_ROI_G_PPG, fps)
-    M_ROI_C_segments = split_segments(M_ROI_C_PPG, fps)
-
-    combined_segments = combine_segments(
-    R_ROI_G_segments, 
-    R_ROI_C_segments, 
-    L_ROI_G_segments, 
-    L_ROI_C_segments, 
-    M_ROI_G_segments, 
-    M_ROI_C_segments
-    )
-
-    features = []
-    for ppg in combined_segments:
-        fe = FeatureExtractor(fps, *ppg)
-        feature = fe.feature_union()
-        features.append(feature)
-    features = np.array(features)

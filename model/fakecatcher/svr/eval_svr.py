@@ -1,16 +1,12 @@
 import yaml
-from tqdm import tqdm
-import argparse
 import joblib
+import argparse
 import numpy as np
-import pandas as pd
-from sklearn.model_selection import train_test_split
-
+from tqdm import tqdm
+from svr.model import Model
 from data.fakeavceleb import load_data
-from utils.feature.feature_extractor import FeatureExtractor
-from svr.svr_model import SVRModel
 from utils.logging import setup_logging
-from preprocess import extract_feature
+from preprocess_feature import extract_feature
 
 # Set up logging
 global logger
@@ -26,7 +22,7 @@ def majority_voting(probabilities):
 def main():
     # path
     feature_save_path = 'inference_feature.pkl'
-    model_saved_path = 'svr_model_0.pkl'
+    model_saved_path = 'svr_model_2900.pkl'
     
     # argparse
     parser = argparse.ArgumentParser()
@@ -37,12 +33,15 @@ def main():
     with open(args.config_path, 'r', encoding='utf-8') as file:
         config = yaml.safe_load(file)
 
-    
+    valid_features = []
+    valid_labels = []
+
     # Load data
     data_root_directory = config['data_root_directory']
     video_paths, true_labels = load_data(data_root_directory, config["meta_data_csv_path"])
     logger.info(f"Loaded {len(video_paths)} videos.")
 
+   
     # Extract features
     video_features, video_labels = [], []
     for video_path, true_label in tqdm(zip(video_paths, true_labels), desc='Processing videos'):
@@ -55,13 +54,14 @@ def main():
     
 
     # Evaluate model
-    model = SVRModel()
+    model = Model()
     model.load_model(model_saved_path)
 
     correct_predictions = 0
     for features, actual_label in zip(video_features, video_labels):
+        if not isinstance(features, np.ndarray):
+            continue
         segment_probabilities = model.predict(features)
-        breakpoint()
         predicted_label = majority_voting(segment_probabilities)
         logger.info(f"Actual: {actual_label}, Predicted: {predicted_label}")
 
