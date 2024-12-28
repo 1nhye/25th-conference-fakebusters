@@ -58,7 +58,6 @@ class FeatureExtractor:
         f4_flat = f4.flatten()
         mean_S_flat = mean_S.flatten()
         max_S_flat = max_S.flatten()
-
         features = np.concatenate([f1_flat, f3_flat, f4_flat, mean_S_flat, max_S_flat])
 
         return features

@@ -1,6 +1,7 @@
 import os
 import csv
 import pandas as pd
+from pathlib import Path
 
 def get_video_files(base_dir, csv_path):
     """
@@ -20,7 +21,8 @@ def get_video_files(base_dir, csv_path):
         for file in files:
             # 동영상 파일 확인
             if file.endswith(video_extensions):
-                file_path = os.path.join(root, file)
+                # 경로 생성 및 변환 (Path 사용)
+                file_path = Path(root).joinpath(file).as_posix()
                 # 라벨 설정
                 if "manipulated_sequences" in root:
                     label = 0
@@ -53,8 +55,8 @@ def load_fakeforensics_data(csv_path: str):
 # 실행 예제
 if __name__ == "__main__":
     # 작업 디렉토리와 저장할 CSV 파일 경로
-    base_directory = "E:/ff_data"  # 탐색할 루트 디렉토리
+    base_directory = "D:/2024년/4-1/산학/data/ff_data"  # 탐색할 루트 디렉토리
     output_csv = "video_list.csv"  # 저장할 CSV 파일 이름
 
     # 함수 실행
-    print(load_fakeforensics_data(base_directory, output_csv))
+    get_video_files(base_directory, output_csv)

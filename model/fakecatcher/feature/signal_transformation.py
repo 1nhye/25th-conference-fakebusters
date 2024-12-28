@@ -34,14 +34,14 @@ def spectral_auto_correlation(signals: np.ndarray) -> np.ndarray:
     _, signal_length = signals.shape
     delta_f_list = np.arange(-(signal_length - 1) // 2, (signal_length + 1) // 2)
     X_f = fft(signals, axis=1)  # FFT along rows
-    r_xxs = []
-
-    for delta_f in delta_f_list:
+    r_xxs = np.zeros((signals.shape[0], len(delta_f_list)), dtype=np.complex128)
+    
+    for idx, delta_f in enumerate(delta_f_list):
         X_f_shifted = np.roll(X_f, shift=delta_f, axis=1)
         r_xx = np.mean(X_f * np.conjugate(X_f_shifted), axis=1)
-        r_xxs.append(r_xx)
-
-    return np.array(r_xxs).T  # Transpose to have (num_rows, len(delta_f_list))
+        r_xxs[:, idx] = r_xx 
+    
+    return r_xxs 
 
 def autocorrelation(signals: np.ndarray) -> np.ndarray:
     """
