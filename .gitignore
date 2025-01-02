@@ -179,3 +179,6 @@ sample_data/002
 frontend/dbust/public/data
 
 **/*.pkl
+
+**/*.yaml
+

@@ -15,7 +15,9 @@ const AugmentedVideo: React.FC<AugmentedVideoProps> = ({ videoUrl, score }) => {
           <div className="mt-6 space-y-12 lg:grid lg:grid-cols-1 lg:gap-x-6 lg:space-y-0">
             <div className="group relative">
               <video
-                className="w-full max-w-2xl rounded-lg bg-white object-cover group-hover:opacity-75"
+                controlsList="nodownload nofullscreen noremoteplayback"
+                width="1000"
+                className="w-2xl max-w-2xl rounded-lg bg-white object-cover group-hover:opacity-75"
                 autoPlay
                 loop
                 muted

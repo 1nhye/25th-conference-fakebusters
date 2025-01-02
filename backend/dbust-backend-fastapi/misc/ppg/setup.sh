@@ -33,8 +33,8 @@ python -m pip install mediapipe
 # Step 4: Solve dependency conflict
 utils_dir=~/miniconda3/envs/video/lib/python3.11/site-packages/skvideo/io/
 mkdir -p $utils_dir
-mv abstract.py ~/miniconda3/envs/video/lib/python3.11/site-packages/skvideo/io/ || true
-mv ffmpeg.py ~/miniconda3/envs/video/lib/python3.11/site-packages/skvideo/io/ || true
+cp abstract.py ~/miniconda3/envs/video/lib/python3.11/site-packages/skvideo/io/ || true
+cp ffmpeg.py ~/miniconda3/envs/video/lib/python3.11/site-packages/skvideo/io/ || true
 
 echo "Setup completed successfully!"
 

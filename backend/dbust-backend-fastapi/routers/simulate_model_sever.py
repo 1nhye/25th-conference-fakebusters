@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, File, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 import random 
 import httpx
 import os, shutil
 import numpy as np
 import json
+import subprocess
 
 router = APIRouter(
     prefix="/api/models",
@@ -62,7 +63,7 @@ async def roi_model(file: UploadFile = File(...)):
         
     video_file = open(file_path, "rb")
   
-    model_server_url = "http://165.132.46.83:32274/upload-video/"
+    model_server_url = "https://358e-165-132-46-83.ngrok-free.app/upload-video/"
     
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -71,13 +72,14 @@ async def roi_model(file: UploadFile = File(...)):
             
             headers = {
                 "File-Path": file_path,
-                "Score": f"{response.headers["score"]}",
+                "Score":str(response.headers["score"]),
                 "Access-Control-Expose-Headers": "File-Path, Score"
             }
             return StreamingResponse(content=response.iter_bytes(), headers=headers)
         
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=f"Error from model server: {e.response.text}")
+
 
 @router.post("/mmnet")
 async def model(file: UploadFile = File(...)):
@@ -88,7 +90,8 @@ async def model(file: UploadFile = File(...)):
     '''
 
     model_sever_url = "http://165.132.46.87:32116/process_video/"
-    
+    model_server_url = "https://9d4f-165-132-46-93.ngrok-free.app/process_video/"
+
     file_path = os.path.join(VIDEO_DIR, file.filename)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -98,14 +101,14 @@ async def model(file: UploadFile = File(...)):
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(model_sever_url, files={"file": video_file}, headers=headers)
+            response = await client.post(model_server_url, files={"file": video_file}, headers=headers)
             response.raise_for_status()
             
             video_data = response.content
             
             headers = {
                 "File-Path": file_path,
-                "Score": f"{response.headers["X-Inference-Result"]}",
+                "Score": str(response.headers["X-Inference-Result"]),
                 "Access-Control-Expose-Headers": "File-Path, Score"
             }
             
@@ -120,35 +123,9 @@ async def model(file: UploadFile = File(...)):
         print(e)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     
-@router.post("/ppg")
-async def face_roi_model(file: UploadFile = File(...)):
-    '''
-    Simulate the ppg server
-    Input: filekey: str
-    Output: response: StreamingResponse which contains the video file and score in the header
-    '''
-    file_path = os.path.join(VIDEO_DIR, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    video_file = open(file_path, "rb")
-    
-    model_sever_url = "http://165.132.46.85:32697/upload-video/"
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(model_sever_url, files={"file": video_file})
-            response.raise_for_status()
-            
-            return {"Score": response.json()["score"]}
-        
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=f"Error from model server: {e.response.text}")
-
 
 @router.post("/visual-ppg")
 async def get_visual(file: UploadFile = File(...)):
-    
-    model_sever_url = "http://165.132.46.83:30409/upload-video"
     
     PPG_DIR = "misc/ppg"
     file_path = os.path.join(PPG_DIR, file.filename)
@@ -157,7 +134,7 @@ async def get_visual(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
     
     try:
-        subprocess.run(["python3", PPG_DIR +"/main.py", "-v", file_path, "-c", PPG_DIR+"/config.yaml"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(["python", PPG_DIR +"/main.py", "-v", file_path, "-c", PPG_DIR+"/config.yaml"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=f"Error in processing video {e}")
     
@@ -188,3 +165,57 @@ async def get_video(file_name: str):
         yield from file
     
     return StreamingResponse(video_iterator(video_file), media_type="video/mp4")
+
+
+@router.post("/fakecatcher-cnn")
+async def get_result(file: UploadFile = File(...)):
+    model_server_url = "https://534e-165-132-46-85.ngrok-free.app/upload-video/"
+    file_path = os.path.join(VIDEO_DIR, file.filename)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    video_file = open(file_path, "rb")
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(model_server_url, files={"file": video_file})
+            response.raise_for_status()
+            
+            headers = {
+                "File-Path": file_path,
+                "Access-Control-Expose-Headers": "File-Path"
+            }
+            score = response.json()["score"]
+            return JSONResponse(content={"Score": score}, headers=headers)
+        
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=f"Error from model server: {e.response.text}")
+
+
+
+@router.post("/fakecatcher-feature")
+async def get_result(file: UploadFile = File(...)):
+    model_server_url = "https://be4e-165-132-46-92.ngrok-free.app/upload-video"
+    file_path = os.path.join(VIDEO_DIR, file.filename)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    video_file = open(file_path, "rb")
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(model_server_url, files={"file": video_file})
+            response.raise_for_status()
+            
+            headers = {
+                "File-Path": file_path,
+                "Access-Control-Expose-Headers": "File-Path"
+            }
+            score = response.json()["score"]
+            return JSONResponse(content={"Score": score}, headers=headers)
+        
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=f"Error from model server: {e.response.text}")
+

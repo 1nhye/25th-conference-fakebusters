@@ -9,9 +9,11 @@ interface FileUploadProps {
     lipSetVideoUrl: (url: string) => void;
     mmnetSetScore: (score: string) => void;
     mmnetSetVideoUrl: (url: string) => void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setPpgVideos: (ppgVideos: any) => void;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, lipSetScore, lipSetVideoUrl, mmnetSetScore, mmnetSetVideoUrl }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, lipSetScore, lipSetVideoUrl, mmnetSetScore, mmnetSetVideoUrl,setPpgVideos }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [preview, setPreview] = useState<string | null>(null);
     const [isPreviewShown, setIsPreviewShown] = useState(false);
@@ -66,91 +68,141 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, lipSetScore, lipS
         }
     }, [handleFile]);
 
+    const uploadLipreading = useCallback(async (file: File) => {
+        try {
+            const lipFormData = new FormData();
+            lipFormData.append('file', file);
+
+            const lipResponse = await fetch('https://69b3-13-209-124-7.ngrok-free.app/api/models/lipforensic', {
+                method: 'POST',
+                body: lipFormData,
+            });
+
+            if (!lipResponse.ok) {
+                throw new Error('Failed to post video');
+            }
+
+            const lipScore = lipResponse.headers.get('Score');
+            const lipVideoBlob = await lipResponse.blob();
+            const lipVideoUrl = URL.createObjectURL(lipVideoBlob);
+
+            lipSetScore(lipScore || '');
+            lipSetVideoUrl(lipVideoUrl);
+        } catch (error) {
+            console.error('Lipreading upload error:', error);
+        }
+    }, [lipSetScore, lipSetVideoUrl]);
+
+    const uploadMMNET = useCallback(async (file: File) => {
+        try {
+            const mmnetFormData = new FormData();
+            mmnetFormData.append('file', file);
+
+            const mmnetResponse = await fetch('https://69b3-13-209-124-7.ngrok-free.app/api/models/mmnet', {
+                method: 'POST',
+                body: mmnetFormData,
+            });
+
+            if (!mmnetResponse.ok) {
+                throw new Error('Failed to post video');
+            }
+
+            const mmnetScore = mmnetResponse.headers.get('Score');
+            const mmnetVideoBlob = await mmnetResponse.blob();
+            const mmnetVideoUrl = URL.createObjectURL(mmnetVideoBlob);
+
+            mmnetSetScore(mmnetScore || '');
+            mmnetSetVideoUrl(mmnetVideoUrl);
+        } catch (error) {
+            console.error('MMNET upload error:', error);
+        }
+    }, [mmnetSetScore, mmnetSetVideoUrl]);
+
+    const uploadVisualPPG = useCallback(async (file: File) => {
+        try {
+            const ppgFormData = new FormData();
+            ppgFormData.append('file', file);
+
+            const ppgResponse = await fetch('https://69b3-13-209-124-7.ngrok-free.app/api/models/visual-ppg', {
+                method: 'POST',
+                body: ppgFormData,
+            });
+
+            if (!ppgResponse.ok) {
+                throw new Error('Failed to post video');
+            }
+
+            const ppgData = await ppgResponse.json();
+            console.log('Visual PPG response:', ppgData);
+
+            // Store the video names
+            return ppgData.videos;
+        } catch (error) {
+            console.error('Visual PPG upload error:', error);
+            return null;
+        }
+    }, []);
+
+    const getPPGVideo = useCallback(async (videoNames: { ppg_graph: string; ppg_mask: string; ppg_transformed: string }) => {
+        try {
+            const header = new Headers();
+            header.append('ngrok-skip-browser-warning', 'true');
+            const baseUrl = 'https://69b3-13-209-124-7.ngrok-free.app/api/models/video/';
+            const ppgGraphResponse = await fetch(`${baseUrl}${videoNames.ppg_graph}` , { headers: header });
+            const ppgMaskResponse = await fetch(`${baseUrl}${videoNames.ppg_mask}` , { headers: header });
+            const ppgTransformedResponse = await fetch(`${baseUrl}${videoNames.ppg_transformed}` , { headers: header });
+
+            if (!ppgGraphResponse.ok || !ppgMaskResponse.ok || !ppgTransformedResponse.ok) {
+                throw new Error('Failed to fetch PPG videos');
+            }
+
+            const ppgGraphBlob = await ppgGraphResponse.blob();
+            const ppgMaskBlob = await ppgMaskResponse.blob();
+            const ppgTransformedBlob = await ppgTransformedResponse.blob();
+
+            console.log(`${baseUrl}${videoNames.ppg_graph}`)
+            console.log(ppgMaskBlob)
+
+            const ppgGraphUrl = URL.createObjectURL(ppgGraphBlob);
+            const ppgMaskUrl = URL.createObjectURL(ppgMaskBlob);
+            const ppgTransformedUrl = URL.createObjectURL(ppgTransformedBlob);
+
+            return {
+                ppgGraphUrl,
+                ppgMaskUrl,
+                ppgTransformedUrl,
+            };
+        } catch (error) {
+            console.error('Failed to fetch PPG videos:', error);
+            return null;
+        }
+    }, []);
+
+
     const handleUpload = useCallback(async () => {
         if (selectedFile) {
             setIsProcessing(true);
 
-            try {
-                // S3 File Upload
-                // const formData = new FormData();
-                // formData.append('file', selectedFile);
-
-                // const response = await fetch('http://localhost:8000/api/files/upload', {
-                //     method: 'POST',
-                //     body: formData,
-                // });
-                // if (!response.ok) {
-                //     throw new Error('Upload failed');
-                // }
-                // const data = await response.json();
-                // console.log('File uploaded successfully:', data);
-
-                // Step 1: Process Lipreading
-                const lipFormData = new FormData();
-                lipFormData.append('file', selectedFile);
-
-                const lipResponse = await fetch('http://localhost:8000/api/models/lipforensic', {
-                    method: 'POST',
-                    body: lipFormData,
-                });
-
-                if (!lipResponse.ok) {
-                    throw new Error('Failed to post video');
-                }
-
-                const lipScore = lipResponse.headers.get('Score');
-                console.log('Score:', lipScore);
-
-                const lipVideoBlob = await lipResponse.blob();
-                const lipVideoUrl = URL.createObjectURL(lipVideoBlob);
-                console.log('Video URL:', lipVideoUrl);
-
-
-
-                // Step 2: Process with MMNET model
-                const mmnetFormData = new FormData();
-                mmnetFormData.append('file', selectedFile);
-
-                const mmnetResponse = await fetch('http://localhost:8000/api/models/mmnet', {
-                    method: 'POST',
-                    body: mmnetFormData,
-                });
-
-                if (!mmnetResponse.ok) {
-                    throw new Error('Failed to post video');
-                }
-
-                const mmnetFilePath = mmnetResponse.headers.get('File-Path');
-                console.log('File path:', mmnetFilePath);
-
-                const mmnetScore = mmnetResponse.headers.get('Score');
-                console.log('Score:', mmnetScore);
-
-                const mmnetVideoBlob = await mmnetResponse.blob();
-                const mmnetVideoUrl = URL.createObjectURL(mmnetVideoBlob);
-                console.log('Video URL:', mmnetVideoUrl);
-
-                
-                // // Simulate upload
-                // await new Promise((resolve) => setTimeout(resolve, 1000));
-                // console.log('Simulated upload completed in 1000 milliseconds');
-                
-                lipSetScore(lipScore || '');
-                lipSetVideoUrl(lipVideoUrl);
-                mmnetSetScore(mmnetScore || '');
-                mmnetSetVideoUrl(mmnetVideoUrl);
-                onFileUpload(selectedFile);
-
-                setPreview(null);
-                setIsPreviewShown(false);
-                setSelectedFile(null);
-            } catch (error) {
-                console.error('Upload error:', error);
-            } finally {
-                setIsProcessing(false);
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const [mmnetResult, lipreadingResult, visualPpgResult] = await Promise.all([
+                uploadMMNET(selectedFile),
+                uploadLipreading(selectedFile),
+                uploadVisualPPG(selectedFile)
+            ]);
+    
+            if (visualPpgResult) {
+                const ppgVideoUrls = await getPPGVideo(visualPpgResult);
+                setPpgVideos(ppgVideoUrls);
             }
+
+            onFileUpload(selectedFile);
+
+            setPreview(null);
+            setIsPreviewShown(false);
+            setSelectedFile(null);
+            setIsProcessing(false);
         }
-    }, [selectedFile, onFileUpload, lipSetScore, lipSetVideoUrl, mmnetSetScore, mmnetSetVideoUrl]);
+    }, [selectedFile, onFileUpload, uploadLipreading, uploadMMNET, uploadVisualPPG]);
 
     const handleClear = useCallback(() => {
         setPreview(null);
@@ -166,11 +218,18 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, lipSetScore, lipS
             onDrop={handleDrop}
         >
             {isProcessing ? (
-                <HStack gap="10">
-                    <ProgressCircleRoot size="lg" value={null}>
-                        <ProgressCircleRing cap="round" />
-                    </ProgressCircleRoot>
-                </HStack>
+                <div className={styles.previewContainer}>
+                    <HStack gap="10" className={styles.progressContainer}>
+                        <ProgressCircleRoot size="lg" value={null}>
+                            <ProgressCircleRing cap="round" />
+                        </ProgressCircleRoot>
+                    </HStack>
+                    {selectedFile && selectedFile.type.startsWith('video/') ? (
+                        <video autoPlay loop muted className={`${styles.preview} ${styles.processing}`} src={preview || undefined} />
+                    ) : (
+                        <img className={`${styles.preview} ${styles.processing}`} src={preview || undefined} alt="Preview" />
+                    )}
+                </div>
             ) : (
                 preview ? (
                     <div className={styles.previewContainer}>
@@ -185,29 +244,31 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, lipSetScore, lipS
                         </div>
                     </div>
                 ) : (
-                    <form className={styles.uploadForm}>
-                        <div className={styles.uploadIconContainer}>
-                            <label className={styles.label} htmlFor="fileElem">
-                                <svg 
-                                    xmlns="http://www.w3.org/2000/svg" 
-                                    fill="#ebebeb" 
-                                    className={styles.uploadIcon} 
-                                    viewBox="0 0 16 16"
-                                >
-                                    <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"></path>
-                                    <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"></path>
-                                </svg>
-                            </label>
-                        </div>
-                        <input 
-                            type="file" 
-                            id="fileElem" 
-                            className={styles.fileInput} 
-                            accept="image/*,video/*" 
-                            onChange={handleFileChange}
-                        />
-                        <label className={styles.button} htmlFor="fileElem">Upload Image/Video</label>
-                    </form>
+
+                        <form className={styles.uploadForm}>
+                            <div className={styles.uploadIconContainer}>
+                                <label className={styles.label} htmlFor="fileElem">
+                                    <svg 
+                                        xmlns="http://www.w3.org/2000/svg" 
+                                        fill="#ebebeb" 
+                                        className={styles.uploadIcon} 
+                                        viewBox="0 0 16 16"
+                                    >
+                                        <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"></path>
+                                        <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"></path>
+                                    </svg>
+                                </label>
+                            </div>
+                            <input 
+                                type="file" 
+                                id="fileElem" 
+                                className={styles.fileInput} 
+                                accept="image/*,video/*" 
+                                onChange={handleFileChange}
+                            />
+                            <label className={styles.button} htmlFor="fileElem">Upload Image/Video</label>
+                        </form>
+
                 )
             )}
         </div>

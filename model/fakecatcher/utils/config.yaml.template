@@ -1,0 +1,15 @@
+# ROI Process
+landmarker_path : 
+
+# Load Data
+inference_video_path : 
+meta_data_csv_path : 
+
+# Constants
+fps_standard: 
+seg_time_interval:
+
+# Model
+model_path: 
+model_type: # baseCNN, ResNet34, EfficientNetB3, SVR, Pycaret
+output_path: 

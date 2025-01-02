@@ -5,9 +5,8 @@ from scipy.stats import entropy
 from scipy.fft import fft, fftfreq
 from .signal_transformation import *
 
-class FeatureExtractor:
-    """
-    """[[                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    ]]
+class FeatureExtractor:              
+    
     def __init__(self, fps, *args):
         """
         params:
@@ -59,7 +58,6 @@ class FeatureExtractor:
         mean_S_flat = mean_S.flatten()
         max_S_flat = max_S.flatten()
         features = np.concatenate([f1_flat, f3_flat, f4_flat, mean_S_flat, max_S_flat])
-
         return features
     ## ====================================================================
     ## ========================= Feature Creation =========================

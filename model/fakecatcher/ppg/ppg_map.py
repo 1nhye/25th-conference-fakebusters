@@ -1,6 +1,6 @@
 import numpy as np
-from ppg_c import PPG_C
-from interpolate import frequency_resample
+from ppg.ppg_c import PPG_C
+from ppg.interpolate import frequency_resample
 
 class PPG_MAP:
     """

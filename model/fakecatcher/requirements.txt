@@ -1,0 +1,9 @@
+tqdm
+pyyaml
+scikit-image
+scikit-learn
+scikit-video
+joblib
+pandas
+gdown
+opencv-python==4.10.0.84

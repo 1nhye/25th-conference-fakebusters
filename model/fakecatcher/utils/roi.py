@@ -5,6 +5,14 @@ import mediapipe as mp
 from typing import Tuple
 from mediapipe.tasks.python.vision.face_landmarker import FaceLandmarkerResult
 
+class DetectionError(Exception):
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
+
+    def __str__(self):
+        return f"Error Code {self.code}: {self.args[0]}"
+
 class ROIProcessor:
     """
     EXAMPLE USAGE
@@ -21,17 +29,16 @@ class ROIProcessor:
     Affine Transformation:
         transformed_frames, fps = roi.detect_with_map()
     """
-
     ## ROI Landmark Index
     POLYGONS = {
         "R": [139, 100, 203, 135],
         "L": [368, 329, 423, 364],
         "M": [226, 25 , 110, 24 , 23 , 22 , 26 , 112, 243, 244,
-              245, 122, 6  , 351, 465, 464, 463, 341, 256, 252,
-              253, 254, 339, 255, 446, 265, 372, 345, 352, 280,
-              411, 416, 434, 432, 436, 426, 423, 358, 279, 360,
-              363, 281, 5  , 51 , 134, 131, 49 , 129, 203, 206,
-              216, 212, 214, 192, 187, 50 , 123, 116, 143, 35]
+                245, 122, 6  , 351, 465, 464, 463, 341, 256, 252,
+                253, 254, 339, 255, 446, 265, 372, 345, 352, 280,
+                411, 416, 434, 432, 436, 426, 423, 358, 279, 360,
+                363, 281, 5  , 51 , 134, 131, 49 , 129, 203, 206,
+                216, 212, 214, 192, 187, 50 , 123, 116, 143, 35]
     }
 
     ## ROI Color
@@ -126,12 +133,15 @@ class ROIProcessor:
         """
         self.video_path = video_path
         self.model_path = config["landmarker_path"]
-        self.fps_standard = int(config["fps_standard"])
         self.seg_time_interval = int(config["seg_time_interval"])
         self.detection_result_list = []
         self.frame_list = []
         self.height = 0
         self.width = 0
+
+        self.detection_check = False
+        self.detection_count = 0
+        self.detection_max = 0
 
         ## Set options for MediaPipe facelandmark detector
         BaseOptions = mp.tasks.BaseOptions
@@ -155,21 +165,55 @@ class ROIProcessor:
                 success, frame = cap.read()
                 if not success:
                     break
-                
+
                 ## Change frame color from BGR to RGB for later visualization.
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                self.height, self.width, _ = frame.shape
                 ## Convert frame image into designated input type for MediaPipe model.
                 mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
                 timestep_ms= int((frame_idx / self.fps_local) * 1000)
                 detection_result = landmarker.detect_for_video(mp_image, timestep_ms)
+
+                if len(detection_result.face_landmarks) == 0:
+                    self.detection_count = 0
+                else:
+                    self.detection_count += 1
+                    self.detection_check = True
+                    self.detection_max = max(self.detection_max, self.detection_count)
+
                 ## Append detection result and original frame image onto respective lists.
                 self.detection_result_list.append(detection_result)
                 self.frame_list.append(frame)
                 frame_idx += 1
 
             ## Release resources.
+            self.check()
             cap.release()
             cv2.destroyAllWindows()
+
+    def check(self):
+
+        if self.detection_check is False or self.detection_max < self.fps_local * 3:
+            raise DetectionError("No Faces Were Detected!", 1004)
+        
+        succesful_indices = []
+        for index, detection_result in enumerate(self.detection_result_list):
+
+            try:
+                face_landmark = detection_result.face_landmarks[0]
+                landmark_points = [[int(landmark.x * self.width), int(landmark.y * self.height)] for landmark in face_landmark]
+
+                if all(0 <= x <= self.width and 0 <= y <= self.height for x, y in landmark_points):
+                    succesful_indices.append(index)
+
+            except IndexError:
+                pass
+
+        start = min(succesful_indices)
+        end = max(succesful_indices)
+        self.frame_list = self.frame_list[start:end]
+        self.detection_result_list = self.detection_result_list[start:end]
+        self.frame_count = len(self.detection_result_list)
 
     def map(self, frame: np.ndarray, detection_result: FaceLandmarkerResult) -> np.ndarray:
         """
@@ -185,16 +229,10 @@ class ROIProcessor:
         ## Return an empty image if no face is detected in the given frame.
         try:
             face_landmark = detection_result.face_landmarks[0]
-        except IndexError:
+            origin_frame = np.copy(frame)
+            landmark_points = [[int(landmark.x * self.width), int(landmark.y * self.height)] for landmark in face_landmark]
+        except Exception:
             return np.zeros((600, 1320, 3), dtype=np.float32)
-
-        ## Denormalize the coordinates of landmarks using the frame's height and width.
-        origin_frame = np.copy(frame)
-        self.height, self.width, _ = frame.shape
-        landmark_points = [
-            [int(landmark.x * self.width), int(landmark.y * self.height)]
-            for landmark in face_landmark
-        ]
 
         ## Create a target image for relocating the landmarks.
         destin_frame = np.zeros((600, 1320, 3), dtype=np.float32)
@@ -250,26 +288,20 @@ class ROIProcessor:
         ## If no face is detected in the given frame, return the original frame as is.
         try:
             face_landmark = detection_result.face_landmarks[0]
-        except IndexError:
+            annotated_frame = np.copy(frame)
+            landmark_points = [[int(landmark.x * self.width), int(landmark.y * self.height)] for landmark in face_landmark]
+        except Exception:
             return frame
-        
-        ## Denormalize the coordinates of landmarks using the frame's height and width.
-        annotated_frame = np.copy(frame)
-        self.height, self.width, _ = frame.shape
-        landmark_points = [
-            (int(landmark.x * self.width), int(landmark.y * self.height))
-            for landmark in face_landmark
-        ]
 
-        def draw_polygons(regions, color_map, thickness=2):
-            for region, indices in regions.items():
-                polygon_points = np.array([landmark_points[i] for i in indices], dtype=np.int32)
-                cv2.polylines(annotated_frame, [polygon_points], isClosed=True, color=color_map[region], thickness=thickness)
-        
-        ## Draw boundaries of ROI "R", "L", and "M" on the frame.
-        draw_polygons(ROIProcessor.POLYGONS, ROIProcessor.COLORS)
-        ## Draw the triangular landmarks inside the ROI "M" on the frame.
-        draw_polygons({"triangle": ROIProcessor.TRIANGLE_INDICES}, {"triangle": [220, 220, 220]}, thickness=1)
+        ## 프레임 이미지 위에 ROI "R", "L", "M" 경계선 그리기.
+        for region, indices in ROIProcessor.POLYGONS.items():
+            polygon_points = np.array([landmark_points[i] for i in indices], dtype=np.int32)
+            cv2.polylines(annotated_frame, [polygon_points], isClosed=True, color=ROIProcessor.COLORS[region], thickness=2)
+
+        ## 프레임 이미지 위에 ROI "M" 내부 삼각 랜드마크 그리기.
+        for indices in ROIProcessor.TRIANGLE_INDICES:
+            polygon_points = np.array([landmark_points[i] for i in indices], dtype=np.int32)
+            cv2.polylines(annotated_frame, [polygon_points], isClosed=True, color=[220,220,220], thickness=1)
         return annotated_frame
 
     def calculate(self, frame: np.ndarray, detection_result: FaceLandmarkerResult) -> Tuple[np.ndarray]:
@@ -288,15 +320,9 @@ class ROIProcessor:
         ## Return np.nan if no face is detected in the given frame.
         try:
             face_landmark = detection_result.face_landmarks[0]
-        except IndexError:
-            return [np.full(3, np.nan) for _ in range(3)]
-
-        ## Denormalize the coordinates of landmarks using the frame's height and width.
-        self.height, self.width, _ = frame.shape
-        landmark_points = [
-            [int(landmark.x * self.width), int(landmark.y * self.height)]
-            for landmark in face_landmark
-        ]
+            landmark_points = [[int(landmark.x * self.width), int(landmark.y * self.height)] for landmark in face_landmark]
+        except Exception:
+            return  [np.full(3, np.nan) for _ in range(3)]
 
         ## Define an inner function to apply a mask based on polygon shapes and calculate the mean color of pixels inside the masked area.
         def get_mean_color(landmark_indices):
@@ -361,10 +387,10 @@ class ROIProcessor:
             fps_local: The frames per second (FPS) used for the video.
         """
         annotated_frames = []
-        annotated_frames = np.empty((self.frame_count, 600, 1320, 3), dtype=np.uint8)
+        annotated_frames = np.empty((self.frame_count, self.height, self.width, 3), dtype=np.uint8)
         with tqdm(total=self.frame_count, desc="Processing Frames", unit="frame") as pbar:
-            for frame, detection_result in zip(self.frame_list, self.detection_result_list):
-                annotated_frames.append(self.draw(frame, detection_result))                
+            for index, (frame, detection_result) in enumerate(zip(self.frame_list, self.detection_result_list)):
+                annotated_frames[index] = self.draw(frame, detection_result)
                 pbar.update(1)
         return annotated_frames, self.fps_local
 

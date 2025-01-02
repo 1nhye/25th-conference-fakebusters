@@ -1,71 +1,87 @@
+import os
 import yaml
-import logging
+import json
 import argparse
 from tqdm import tqdm
-from utils.roi import ROIProcessor
+from utils.roi import ROIProcessor, DetectionError
+from utils.logging import setup_logging
 from ppg.ppg_map import PPG_MAP
-from ppg.ppg_c import PPG_C
-
 from data.fakeforensics import load_fakeforensics_data
-import json
 
-# Argument parser
-#parser = argparse.ArgumentParser()
-# parser.add_argument('-c', '--config_path', type=str, required=True, help="Path to the config file.")
-config_path = '/Users/treecollector/Desktop/test/model/fakecatcher/utils/config.yaml'
-#args = parser.parse_args()
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config_path", type=str, required=True, help="Path to the config file.")
+    parser.add_argument("-l", "--log_path", type=str, required=True, help="Path to the log file.")
+    parser.add_argument("-o", "--output_directory", type=str, required=True, help="Path to the output directory.")
+    return parser.parse_args()
 
-# # Load configuration
-with open(config_path, 'r', encoding='utf-8') as file:
-    config = yaml.safe_load(file)
+if __name__ == "__main__":
+    
+    ## Parse arguments and set up logger, config.
+    args = parse_arguments()
+    logger = setup_logging(args.log_path)
+    
+    if not os.path.exists(args.config_path):
+        raise FileNotFoundError(f"Config file not found: {args.config_path}")
+    
+    if not os.path.exists(args.output_directory):
+        os.makedirs(os.path.dirname(args.output_directory), exist_ok=True)
+    output_path = os.path.join(args.output_directory, "ppg_maps.json")
 
-# # Logger setup
-# console_handler = logging.StreamHandler()
-# console_handler.setLevel(logging.INFO)
-# console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    with open(args.config_path, 'r', encoding='utf-8') as file:
+        config = yaml.safe_load(file)
+        logger.info("config file was loaded succesfully.")
 
-# file_handler = logging.FileHandler('app.log', mode='w')
-# file_handler.setLevel(logging.DEBUG)
-# file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    ## Load dataset metadata.
+    logger.info("Loading video paths and labels...")
+    video_paths, true_labels = load_fakeforensics_data(config["meta_data_csv_path"])
 
-logger = logging.getLogger()
-# logger.setLevel(logging.DEBUG)
-# logger.addHandler(console_handler)
-# logger.addHandler(file_handler)
-
-# Paths
-root_directory = '/root/deepfake_detection'
-model_path = config["model_path"]
-meta_data_csv_path = config["meta_data_csv_path"]
-
-# Load data
-logger.info("Loading video paths and labels...")
-video_paths, true_labels = load_fakeforensics_data(meta_data_csv_path)
-
-# Process videos
-logger.info("Processing videos to generate PPG maps...")
-results = []
-for i, (video_path, true_label) in enumerate(tqdm(zip(video_paths, true_labels), total=len(video_paths), desc="Processing videos")):
-
-#cv2.imwrite("/Users/treecollector/Desktop/test/model/fakecatcher/ppg/ppg_map.png", ppg_map)
-
-    # Process video with ROIProcessor
-    landmarker = ROIProcessor(video_path="/Volumes/Hoesu_ssd/ff_data/original_sequences/actors/01__outside_talking_still_laughing.mp4", config=config)
-    transformed_frames, fps = landmarker.detect_with_map()
-    for segment in transformed_frames:
-        # Compute PPG Map
-        ppg_map = PPG_MAP(segment, fps, config).compute_map()
-        breakpoint()
-        print("shape of ppg_map: ", ppg_map.shape)
-        # Append results
-        results.append({
-            'label': true_label,
-            'ppg_map': ppg_map.tolist()
-        })
-        # Save results to JSON file
-
-        output_json_path = "ppg_map_results.json"
-        with open(output_json_path, 'w', encoding='utf-8') as json_file:
-            json.dump(results, json_file, ensure_ascii=False, indent=4)
-
-        logger.info(f"Results saved to {output_json_path}")
+    ## Process videos
+    logger.info("Processing videos to generate PPG maps...")
+    results = []
+    
+    for i, (video_path, true_label) in enumerate(tqdm(zip(video_paths, true_labels), total=len(video_paths), desc="Processing videos")):        
+        logger.info(f"Processing {os.path.basename(video_path)}...")
+        
+        ## Exception Handling for ROIProcessor initialization.
+        try:
+            landmarker = ROIProcessor(video_path=video_path, config=config)
+        except DetectionError:
+            logger.error("     DETECTION ERROR: This Video is TRASH!")
+            continue
+        except Exception as e:
+            logger.error(f"     UNEXPECTED EXCEPTION (ROI_PROCESSOR): {e}")
+            continue
+        
+        ## Exception Handling for ROIProcessor.detect_with_map.
+        try:
+            transformed_frames, fps = landmarker.detect_with_map()
+        except Exception as e:
+            logger.error(f"     UNEXPECTED EXCEPTION (DETECT_WITH_MAP): {e}")
+            continue
+        
+        for index, segment in enumerate(transformed_frames):
+            
+            ## Exception Handling for PPG_MAP.
+            try:
+                ppg_map = PPG_MAP(segment, fps, config).compute_map()
+            except Exception as e:
+                logger.error(f"     UNEXPECTED EXCEPTION (PPG_MAP): {e}")
+                continue
+            
+            ## Show successful result summary and save results.
+            logger.info(f"     Segment {index}: Success!")
+            logger.debug(f"     Shape of ppg map for segment {index}: {ppg_map.shape}")
+            results.append({
+                'label': true_label,
+                'ppg_map': ppg_map.tolist()
+            })
+            
+        if i%100==0:                
+            with open(output_path, 'w', encoding='utf-8') as json_file:
+                json.dump(results, json_file, ensure_ascii=False, indent=4)
+            logger.info(f"Preliminary Results saved to {output_path} at iteration {i}")
+            
+    with open(output_path, 'w', encoding='utf-8') as json_file:
+        json.dump(results, json_file, ensure_ascii=False, indent=4)
+    logger.info(f"Results saved to {output_path}")
